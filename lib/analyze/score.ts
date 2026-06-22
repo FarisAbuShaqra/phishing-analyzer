@@ -28,7 +28,7 @@ export function scoreSignals(signals: Signal[]): {
 export function recommendedAction(category: Report["riskCategory"]): string {
   switch (category) {
     case "Low":
-      return "No strong phishing signals were found. This looks likely safe, but stay cautious — never enter credentials unless you navigated to the site yourself.";
+      return "No strong phishing signals were found. This looks likely safe, but stay cautious. Never enter credentials unless you navigated to the site yourself.";
     case "Medium":
       return "Treat this as suspicious. Do not click any links or download attachments. Verify the sender through a known, independent channel (e.g. the official app or a number you already trust) before acting.";
     case "High":

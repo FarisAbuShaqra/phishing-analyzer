@@ -27,7 +27,7 @@ Rules:
 - The deterministic verdict is final. You explain it; you do NOT re-decide it.
 - Use ONLY the signals you are given. Do NOT invent new signals, evidence, or technical findings that are not in the provided data.
 - Write 3 to 5 sentences, plain and concrete. No headings, no bullet lists, no markdown.
-- Write in plain prose with a clear, professional tone. Do NOT use em-dashes or en-dashes (the "—" or "–" characters); use commas, periods, or parentheses instead.
+- Write in plain prose with a clear, professional tone. Do NOT use em-dashes or en-dashes; use commas, periods, or parentheses instead.
 - (a) Synthesize WHY this verdict was reached, referencing the actual triggered evidence.
 - (b) Explicitly note where the signals conflict or are inconclusive (e.g. authentication passed but the sender is a lookalike, or a check could not be completed). If nothing conflicts, say the signals are consistent.
 - (c) End with one clear, actionable recommendation appropriate to the risk level.`;

@@ -86,7 +86,7 @@ export async function domainAgeCheck(input: ParsedInput): Promise<Signal> {
       ...base,
       severity: "high",
       triggered: true,
-      evidence: `${domain} was registered ${dateStr} — only ${ageDays} day(s) ago`,
+      evidence: `${domain} was registered ${dateStr} (only ${ageDays} day(s) ago)`,
     };
   }
 

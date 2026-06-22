@@ -32,7 +32,7 @@ export function authResultsCheck(verdict: AuthVerdict): Signal {
   const base = {
     id: "email-authentication",
     label: "Email authentication (SPF / DKIM / DMARC)",
-    why: "SPF, DKIM, and DMARC confirm an email truly came from the domain it claims; a failure means it was likely spoofed. A pass only proves origin — not that the sending domain is trustworthy.",
+    why: "SPF, DKIM, and DMARC confirm an email truly came from the domain it claims; a failure means it was likely spoofed. A pass only proves origin, not that the sending domain is trustworthy.",
   } as const;
 
   if (!verdict.available) {
@@ -62,7 +62,7 @@ export function authResultsCheck(verdict: AuthVerdict): Signal {
       ...base,
       severity: "high",
       triggered: true,
-      evidence: `${failed.map((f) => `${f.toUpperCase()}=fail`).join(", ")} — full results: ${summary}`,
+      evidence: `${failed.map((f) => `${f.toUpperCase()}=fail`).join(", ")} (full results: ${summary})`,
     };
   }
 
@@ -70,7 +70,7 @@ export function authResultsCheck(verdict: AuthVerdict): Signal {
     ...base,
     severity: "info",
     triggered: false,
-    evidence: `${summary} — origin confirmed, but this is not proof of safety`,
+    evidence: `${summary}. Origin confirmed, but this is not proof of safety`,
   };
 }
 

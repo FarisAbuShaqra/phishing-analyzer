@@ -1,126 +1,46 @@
-# Phishing Triage Analyzer
+# Explainable Phishing Triage Analyzer
 
-Paste a suspicious email, message, or URL and get an **explainable threat report**: an overall risk score (0–100), a signal-by-signal breakdown of *why* it's risky, and a recommended action.
+Paste a suspicious email, message, or link and get a plain, evidence-backed verdict, signal by signal, instead of a black-box guess.
 
-The distinctive angle is **transparency**. This is not a black-box "phishing: yes/no" tool — every verdict is backed by concrete, named evidence (a domain either *is* punycode or it isn't), and the report is honest about uncertainty.
+The core idea: a deterministic engine decides the verdict; an LLM only explains it. Detection is done by explicit, verifiable rules (so it is reliable and auditable), and the AI layer turns those findings into a clear human explanation. The AI never changes the score.
 
-- The **deterministic checks are facts.** They run server-side with no AI and produce the score.
-- The optional **AI layer only explains** those facts in plain English. It never decides the verdict.
-- This is a **triage and education tool, not a replacement for enterprise email security.**
+![Analyzer home and risk score](screenshots/home.png)
 
-## Two ways to analyze
+## What it does
 
-1. **Paste text** — drop in a suspicious email, message, or URL.
-2. **Upload a `.eml`** — the actual email file, parsed server-side with [`mailparser`](https://nodemailer.com/extras/mailparser/). This is **stronger than pasted text**: it reads the *real* `From` address (not just the visible display name), the `Reply-To` / `Return-Path`, and the **SPF / DKIM / DMARC** authentication results — header data that simply isn't present when you paste body text.
+Accepts a pasted email, message, or URL, or an uploaded .eml file (which exposes the real sender headers). It runs a deterministic signal engine and produces a 0 to 100 risk score with a Low, Medium, or High verdict and a recommended action. It can also generate a plain-language explanation of the findings via the Anthropic API. It works fully without a key; the AI layer is never load-bearing.
 
-The report shows the detected real sender and the SPF/DKIM/DMARC verdict prominently at the top.
+## Detection signals
 
-### How do I get a `.eml` file?
+Domain and URL: lookalike or typosquatted domains, punycode and homograph tricks, link-text-versus-destination mismatch, raw-IP and userinfo tricks, subdomain stacking, risky TLDs, and URL shorteners.
 
-- **Gmail (web):** open the email → ⋮ menu → "Download message"
-- **Outlook (web):** open the email → ⋮ menu → "Save as" (or drag the email to your desktop)
-- **Apple Mail:** select the email → File → "Save As" → Raw Message Source
-- **Outlook (desktop):** open the email → File → Save As → choose `.eml`
+Domain age: an RDAP lookup flags very newly registered domains, and degrades gracefully if unavailable.
 
-(The app shows this same list in a collapsible helper next to the upload zone.)
+Email authentication (.eml): parses headers and grades SPF, DKIM, and DMARC. A fail is a strong red flag; a pass confirms origin but does not by itself prove safety.
 
-## What it checks
+Language: urgency and threat phrasing, credential and payment requests, generic greetings, and sender display-name versus address mismatch.
 
-**URLs & domains**
-- Punycode (`xn--`) and mixed-script / homograph domains
-- Lookalike / typosquat domains (edit-distance match against a built-in brand list: PayPal, Microsoft, Apple, Amazon, Google, DHL, FedEx, Emirates, ADCB, Emirates NBD, and more)
-- Link text vs. href mismatch (disguised markdown/HTML links)
-- Suspicious URL structure: raw-IP hosts, `@` userinfo trick, excessive subdomain stacking, known URL shorteners, and high-abuse TLDs (`.zip`, `.xyz`, `.top`, …) in a credential context
-- **Domain age** via free RDAP (`rdap.org`) — flags domains younger than ~90 days. Best-effort: wrapped in a short timeout and try/catch, so a failed or slow lookup degrades to an informational "domain age unavailable" signal and never crashes or hangs the request.
+![High-risk phishing result with triggered signals](screenshots/high-risk.png)
 
-**Language & content**
-- Urgency / threat phrasing ("account suspended", "verify within 24 hours", "unusual activity detected")
-- Credential or payment asks (password, OTP/2FA code, gift card, wire transfer, crypto, bank details)
-- Generic greeting ("Dear Customer/User/Member")
-- Sender mismatch: display name impersonates a brand but the real address domain is unrelated
+## How scoring works
 
-**Email headers (`.eml` uploads only)**
-- **Real `From` address** — the mismatch check runs against the true header address, not text inferred from the body.
-- **`Reply-To` / `Return-Path` mismatch** — flagged (medium) when their domain differs from the `From` domain, a common way to route your reply or bounces to an attacker.
-- **SPF / DKIM / DMARC** (`Authentication-Results` header), graded carefully:
-  - `spf=fail`, `dkim=fail`, or `dmarc=fail` → **high-severity, triggered.**
-  - `pass` → a reassuring **info** signal that **does not lower the score on its own.** A phisher can pass authentication from their *own* lookalike domain, so an email that passes auth but has a lookalike sender still scores **High**. A pass only confirms the email truly came from the domain it claims — the other checks decide whether that domain is trustworthy.
-  - **Missing** `Authentication-Results` header → neutral, non-triggered info ("email authentication results not available"). Absence is never treated as a red flag (same graceful-degradation pattern as the domain-age lookup).
+Each signal carries a severity weight. Triggered weights sum, capped at 100, into a category. Passed checks are shown too, as a transparency record of what was verified and cleared.
 
-Each signal carries a severity weight (high = 30, medium = 15, low = 7, info = 0). Triggered weights are summed and capped at 100: **0–29 Low, 30–64 Medium, 65–100 High.** The report also lists key checks that *passed*, so you can see what was examined.
+![Legitimate email scored Low with AI explanation](screenshots/low-risk.png)
 
-## Run it
+## Tech stack
 
-```bash
-npm install
-npm run dev
-```
+Next.js (App Router) with TypeScript and Tailwind. Analysis runs server-side, and the Anthropic API key is read from the server environment and never exposed to the client.
 
-Then open http://localhost:3000. **No API key is required** — the app is fully functional and demoable without one.
+## Run locally
 
-## Try these inputs
+Install dependencies and start the dev server:
 
-**1. Crafted phishing email → expect High**
-```
-From: PayPal Support <security@paypa1-verify.xyz>
-Subject: Your account has been suspended
+    npm install
+    npm run dev
 
-Dear Customer,
+Open http://localhost:3000. The deterministic engine works with no configuration. To enable the AI explanation layer, add an ANTHROPIC_API_KEY to a .env.local file.
 
-We detected unusual activity on your account. Your account has been suspended.
-You must verify within 24 hours or it will be permanently closed.
+## Disclaimer
 
-Confirm your password and one-time code here: http://paypal.com.secure-login.xyz/verify
-
-PayPal Security Team
-```
-Triggers lookalike domain, suspicious URL structure, sender mismatch, urgency, credential ask, and generic greeting.
-
-**2. Disguised link → expect Medium/High**
-```
-Your invoice is ready. View it here: [https://www.microsoft.com/account](http://micros0ft-billing.top/login)
-```
-Triggers link text vs. href mismatch, lookalike domain, and a risky TLD.
-
-**3. Plain benign message → expect Low**
-```
-Hi Sam, thanks for the notes from today's meeting. I'll send over the
-final deck tomorrow morning. Have a good evening!
-```
-No signals trigger.
-
-## The AI explanation layer (Phase 3)
-
-The AI layer adds a short plain-English paragraph **on top of** the deterministic report — it explains the findings, it does not decide them. The score, category, and signal cards are produced entirely by the deterministic engine and are unchanged whether or not the AI layer runs.
-
-**Key-optional.** With no key set, `explain()` returns `null` and the UI shows a small muted note ("AI explanation disabled — add an API key to enable"). To enable it, copy `.env.local.example` to `.env.local` and set a key:
-
-```bash
-cp .env.local.example .env.local
-# then edit .env.local:
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-`.env.local` is gitignored. Restart `npm run dev` after adding the key.
-
-How it works:
-- Uses the official Anthropic SDK (`@anthropic-ai/sdk`), model **`claude-sonnet-4-6`**, read from `process.env.ANTHROPIC_API_KEY`.
-- Runs **server-side only**, inside `/api/analyze` (`lib/ai.ts`). The key never reaches client code.
-- The prompt sends the model the message content, the triggered signals (label + evidence), the checks that passed, and the overall risk score/category — and instructs it to **explain only what the engine found, never to invent new signals.** It produces 3–5 sentences that synthesize the verdict, call out where signals conflict or are inconclusive, and end with a clear recommended action.
-- **Graceful by design:** if the API call fails or times out, `aiExplanation` falls back to `null` and the full deterministic report still renders. The AI layer is never load-bearing.
-
-## Limitations (honest)
-
-- The deterministic checks are reliable for the patterns they cover, but **no rule set catches every phishing technique.** A Low score is not a guarantee of safety.
-- **Authentication `pass` is confirmation of origin, not proof of safety.** It only means the email genuinely came from the domain it claims — which is no help if that domain is itself a lookalike the attacker controls.
-- The optional AI layer is probabilistic and only *explains* — do not treat it as a verdict.
-- This tool does **not** replace enterprise email filtering, link sandboxing, or attachment scanning.
-- Domain-age lookups depend on a free third-party RDAP service and may be unavailable.
-
-## Architecture
-
-- **Next.js (App Router) + TypeScript + Tailwind CSS.**
-- All analysis runs server-side in `/api/analyze` (needed for `.eml` parsing, the RDAP lookup, and the optional LLM call). No secrets in client code.
-- `.eml` uploads are parsed with `mailparser`; the body runs through the exact same language + URL checks as pasted text, and the headers add the sender / Reply-To / auth-result signals.
-- Stateless — no database. Paste in (or upload), report out.
-- Signal engine lives in `lib/analyze/` as small pure functions, each returning a typed `Signal` (`urlChecks`, `languageChecks`, `headerChecks`, `domainAge`, `score`).
+An explainable triage and education tool, not a replacement for enterprise email security. Checks report verifiable facts and the AI only explains them; a Low score is not a guarantee of safety.

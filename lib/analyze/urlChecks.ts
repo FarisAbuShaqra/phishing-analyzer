@@ -178,7 +178,7 @@ export function urlStructureCheck(input: ParsedInput): Signal {
     const afterScheme = url.replace(/^https?:\/\//i, "");
     const authority = afterScheme.split(/[/?#]/)[0];
     if (authority.includes("@")) {
-      hits.push(`${url} contains '@' — text before it is ignored by browsers`);
+      hits.push(`${url} contains '@', text before it is ignored by browsers`);
     }
 
     // Excessive subdomains (brand-looking labels stacked before the real domain)

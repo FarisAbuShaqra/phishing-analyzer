@@ -257,7 +257,7 @@ export default function ReportView({ report }: { report: Report }) {
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
           {triggered.length > 0
-            ? `Why it scored ${report.riskScore} — ${triggered.length} signal${
+            ? `Why it scored ${report.riskScore}, ${triggered.length} signal${
                 triggered.length === 1 ? "" : "s"
               } tripped`
             : "Nothing tripped a risk check"}
@@ -270,7 +270,7 @@ export default function ReportView({ report }: { report: Report }) {
           </div>
         ) : (
           <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-            None of the checks flagged a problem. Stay alert anyway — a clean scan is not a
+            None of the checks flagged a problem. Stay alert anyway. A clean scan is not a
             guarantee.
           </p>
         )}
