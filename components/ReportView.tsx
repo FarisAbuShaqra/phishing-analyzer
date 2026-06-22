@@ -185,7 +185,7 @@ export default function ReportView({ report }: { report: Report }) {
       {/* AI explanation (Phase 3) */}
       {report.aiExplanation ? (
         <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-          <h2 className="text-sm font-semibold text-indigo-900">AI explanation</h2>
+          <h2 className="text-sm font-semibold text-indigo-900">AI Explanation</h2>
           <p className="mt-1 whitespace-pre-wrap text-sm text-indigo-900/90">{report.aiExplanation}</p>
           <p className="mt-2 text-xs text-indigo-700/70">
             The AI layer only explains the deterministic findings above — it does not change the score.

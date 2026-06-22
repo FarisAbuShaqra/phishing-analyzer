@@ -89,17 +89,25 @@ final deck tomorrow morning. Have a good evening!
 ```
 No signals trigger.
 
-## Enabling the AI explanation layer (Phase 3)
+## The AI explanation layer (Phase 3)
 
-The AI layer is a clean, key-optional stub today (`lib/ai.ts`). With no key set, `aiExplanation` is `null` and the UI shows a small muted note. To enable it later, create `.env.local`:
+The AI layer adds a short plain-English paragraph **on top of** the deterministic report — it explains the findings, it does not decide them. The score, category, and signal cards are produced entirely by the deterministic engine and are unchanged whether or not the AI layer runs.
+
+**Key-optional.** With no key set, `explain()` returns `null` and the UI shows a small muted note ("AI explanation disabled — add an API key to enable"). To enable it, copy `.env.local.example` to `.env.local` and set a key:
 
 ```bash
-# either one enables the layer
+cp .env.local.example .env.local
+# then edit .env.local:
 ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-...
 ```
 
-The call runs **server-side only** inside `/api/analyze`. No secret ever reaches client code. When implemented, the layer will summarize the evidence, explicitly call out where signals conflict or are inconclusive, and restate the recommended action — while the deterministic score remains authoritative.
+`.env.local` is gitignored. Restart `npm run dev` after adding the key.
+
+How it works:
+- Uses the official Anthropic SDK (`@anthropic-ai/sdk`), model **`claude-sonnet-4-6`**, read from `process.env.ANTHROPIC_API_KEY`.
+- Runs **server-side only**, inside `/api/analyze` (`lib/ai.ts`). The key never reaches client code.
+- The prompt sends the model the message content, the triggered signals (label + evidence), the checks that passed, and the overall risk score/category — and instructs it to **explain only what the engine found, never to invent new signals.** It produces 3–5 sentences that synthesize the verdict, call out where signals conflict or are inconclusive, and end with a clear recommended action.
+- **Graceful by design:** if the API call fails or times out, `aiExplanation` falls back to `null` and the full deterministic report still renders. The AI layer is never load-bearing.
 
 ## Limitations (honest)
 
@@ -112,7 +120,7 @@ The call runs **server-side only** inside `/api/analyze`. No secret ever reaches
 ## Architecture
 
 - **Next.js (App Router) + TypeScript + Tailwind CSS.**
-- All analysis runs server-side in `/api/analyze` (needed for `.eml` parsing, the RDAP lookup, and, later, the LLM call). No secrets in client code.
+- All analysis runs server-side in `/api/analyze` (needed for `.eml` parsing, the RDAP lookup, and the optional LLM call). No secrets in client code.
 - `.eml` uploads are parsed with `mailparser`; the body runs through the exact same language + URL checks as pasted text, and the headers add the sender / Reply-To / auth-result signals.
 - Stateless — no database. Paste in (or upload), report out.
 - Signal engine lives in `lib/analyze/` as small pure functions, each returning a typed `Signal` (`urlChecks`, `languageChecks`, `headerChecks`, `domainAge`, `score`).
