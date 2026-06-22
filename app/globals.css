@@ -3,9 +3,30 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
+  /* Light-only: keep the "trustworthy security tool" surface consistent. */
+  color-scheme: light;
 }
 
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* The one motion in the app: results fade in once, gently. No sliding/bounce. */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
+  }
 }

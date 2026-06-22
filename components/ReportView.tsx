@@ -5,11 +5,29 @@ import type { Report, Severity, Signal } from "@/lib/types";
 
 const CATEGORY_STYLES: Record<
   Report["riskCategory"],
-  { ring: string; text: string; bg: string; label: string }
+  { border: string; bg: string; text: string; stroke: string; label: string }
 > = {
-  Low: { ring: "ring-emerald-500", text: "text-emerald-700", bg: "bg-emerald-50", label: "Low risk" },
-  Medium: { ring: "ring-amber-500", text: "text-amber-700", bg: "bg-amber-50", label: "Medium risk" },
-  High: { ring: "ring-red-500", text: "text-red-700", bg: "bg-red-50", label: "High risk" },
+  Low: {
+    border: "border-emerald-200",
+    bg: "bg-emerald-50",
+    text: "text-emerald-700",
+    stroke: "stroke-emerald-500",
+    label: "Low risk",
+  },
+  Medium: {
+    border: "border-amber-200",
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+    stroke: "stroke-amber-500",
+    label: "Medium risk",
+  },
+  High: {
+    border: "border-red-200",
+    bg: "bg-red-50",
+    text: "text-red-700",
+    stroke: "stroke-red-500",
+    label: "High risk",
+  },
 };
 
 const SEVERITY_STYLES: Record<Severity, { dot: string; chip: string }> = {
@@ -19,20 +37,98 @@ const SEVERITY_STYLES: Record<Severity, { dot: string; chip: string }> = {
   info: { dot: "bg-slate-400", chip: "bg-slate-100 text-slate-700" },
 };
 
-function RiskGauge({ report }: { report: Report }) {
+// Display-only ordering: most severe first. Does not touch scoring.
+const SEVERITY_RANK: Record<Severity, number> = { high: 0, medium: 1, low: 2, info: 3 };
+
+/**
+ * The signature element: a single circular dial that makes the score the hero
+ * of the report. Everything else stays flat and quiet so this reads first.
+ */
+function ScoreHeader({ report }: { report: Report }) {
   const s = CATEGORY_STYLES[report.riskCategory];
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const pct = Math.max(0, Math.min(100, report.riskScore)) / 100;
+  const dashOffset = circumference * (1 - pct);
+
   return (
-    <div className={`flex items-center gap-5 rounded-xl border border-slate-200 ${s.bg} p-5`}>
-      <div
-        className={`flex h-24 w-24 shrink-0 flex-col items-center justify-center rounded-full bg-white ring-4 ${s.ring}`}
-      >
-        <span className={`text-3xl font-bold ${s.text}`}>{report.riskScore}</span>
-        <span className="text-[10px] uppercase tracking-wide text-slate-500">/ 100</span>
+    <div
+      className={`flex flex-col items-center gap-6 rounded-2xl border ${s.border} ${s.bg} p-6 text-center sm:flex-row sm:gap-8 sm:p-8 sm:text-left`}
+    >
+      <div className="relative h-36 w-36 shrink-0">
+        <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
+          <circle
+            cx="64"
+            cy="64"
+            r={radius}
+            fill="none"
+            strokeWidth="11"
+            className="stroke-slate-200/80"
+          />
+          <circle
+            cx="64"
+            cy="64"
+            r={radius}
+            fill="none"
+            strokeWidth="11"
+            strokeLinecap="round"
+            className={s.stroke}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            style={{ transition: "stroke-dashoffset 0.6s ease-out" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className={`text-5xl font-bold tabular-nums leading-none ${s.text}`}>
+            {report.riskScore}
+          </span>
+          <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            / 100
+          </span>
+        </div>
       </div>
+
       <div>
-        <div className={`text-xl font-semibold ${s.text}`}>{s.label}</div>
-        <p className="mt-1 max-w-xl text-sm text-slate-600">{report.recommendedAction}</p>
+        <div className={`text-2xl font-bold tracking-tight ${s.text}`}>{s.label}</div>
+        <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-700">
+          {report.recommendedAction}
+        </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * AI explanation — its own accent (the one non-semantic accent color), placed
+ * right under the score. Clearly labeled, with the note that it only explains.
+ */
+function AIPanel({ report }: { report: Report }) {
+  if (report.aiExplanation) {
+    return (
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-5">
+        <div className="flex items-center gap-2">
+          <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-indigo-700">
+            AI
+          </span>
+        </div>
+        <p className="mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-indigo-950/90">
+          {report.aiExplanation}
+        </p>
+        <p className="mt-3 text-xs text-indigo-700/70">
+          The AI only explains the findings below. It never decides the verdict or changes the
+          score. That part is all computed by the detection engine.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-4">
+      <h2 className="text-sm font-semibold text-slate-600">Plain-English summary is off</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        The verdict and evidence stand on their own. Add an API key to switch on an AI summary that
+        explains them.
+      </p>
     </div>
   );
 }
@@ -56,13 +152,13 @@ function HeaderPanel({ report }: { report: Report }) {
   if (!report.emailAuth) return null;
   const { emailAuth } = report;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         Parsed email headers
       </h2>
       {report.senderAddress && (
         <p className="mt-2 text-sm text-slate-700">
-          <span className="font-medium">Real sender:</span>{" "}
+          <span className="font-medium">Who really sent it:</span>{" "}
           <span className="break-all font-mono">{report.senderAddress}</span>
         </p>
       )}
@@ -78,13 +174,13 @@ function HeaderPanel({ report }: { report: Report }) {
           </div>
         ) : (
           <p className="mt-1 text-sm text-slate-500">
-            Authentication results not available — treated as neutral, not a red flag.
+            No authentication results in this message. Treated as neutral, not a red flag.
           </p>
         )}
       </div>
       {emailAuth.available && (
         <p className="mt-2 text-xs text-slate-400">
-          A pass confirms the email came from the domain it claims — it does not prove the
+          A pass confirms the email really came from the domain it claims. It does not prove that
           domain is trustworthy.
         </p>
       )}
@@ -96,22 +192,26 @@ function SignalCard({ signal, passed }: { signal: Signal; passed?: boolean }) {
   const sev = SEVERITY_STYLES[signal.severity];
   return (
     <div
-      className={`rounded-lg border border-slate-200 p-4 ${passed ? "bg-slate-50/70" : "bg-white"}`}
+      className={`flex h-full flex-col rounded-xl border border-slate-200 p-4 ${
+        passed ? "bg-slate-50/70" : "bg-white"
+      }`}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span
-            className={`h-2.5 w-2.5 rounded-full ${passed ? "bg-slate-300" : sev.dot}`}
+            className={`h-2.5 w-2.5 shrink-0 rounded-full ${passed ? "bg-slate-300" : sev.dot}`}
             aria-hidden
           />
           <h3 className="font-medium text-slate-900">{signal.label}</h3>
         </div>
         {passed ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
             <span aria-hidden>✓</span> Passed
           </span>
         ) : (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${sev.chip}`}>
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${sev.chip}`}
+          >
             {signal.severity}
           </span>
         )}
@@ -119,10 +219,14 @@ function SignalCard({ signal, passed }: { signal: Signal; passed?: boolean }) {
       <dl className="mt-3 space-y-2 text-sm">
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Evidence</dt>
-          <dd className="mt-0.5 break-words font-mono text-[13px] text-slate-800">{signal.evidence}</dd>
+          <dd className="mt-0.5 break-words font-mono text-[13px] text-slate-800">
+            {signal.evidence}
+          </dd>
         </div>
         <div>
-          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Why it matters</dt>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Why it matters
+          </dt>
           <dd className="mt-0.5 text-slate-600">{signal.why}</dd>
         </div>
       </dl>
@@ -134,19 +238,69 @@ export default function ReportView({ report }: { report: Report }) {
   const [showPassed, setShowPassed] = useState(false);
   const [showUrls, setShowUrls] = useState(false);
 
-  const triggered = report.signals.filter((s) => s.triggered);
+  const triggered = report.signals
+    .filter((s) => s.triggered)
+    .sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   const passed = report.signals.filter((s) => !s.triggered);
 
   return (
-    <div className="space-y-6">
-      <RiskGauge report={report} />
+    <div className="animate-fade-in space-y-6">
+      <ScoreHeader report={report} />
 
-      {/* Parsed .eml header summary (real sender + SPF/DKIM/DMARC) */}
+      {/* AI explanation sits right under the score, with its own accent. */}
+      <AIPanel report={report} />
+
+      {/* Parsed .eml header summary (real sender + SPF/DKIM/DMARC). */}
       <HeaderPanel report={report} />
 
-      {/* Metadata */}
+      {/* Triggered signals — the reasons for the score, worst first. */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {triggered.length > 0
+            ? `Why it scored ${report.riskScore} — ${triggered.length} signal${
+                triggered.length === 1 ? "" : "s"
+              } tripped`
+            : "Nothing tripped a risk check"}
+        </h2>
+        {triggered.length > 0 ? (
+          <div className="grid items-stretch gap-3 sm:grid-cols-2">
+            {triggered.map((s) => (
+              <SignalCard key={s.id} signal={s} />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            None of the checks flagged a problem. Stay alert anyway — a clean scan is not a
+            guarantee.
+          </p>
+        )}
+      </section>
+
+      {/* Passed checks — quiet reassurance, collapsed by default. */}
+      {passed.length > 0 && (
+        <section>
+          <button
+            type="button"
+            onClick={() => setShowPassed((v) => !v)}
+            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+            aria-expanded={showPassed}
+          >
+            <span>What we checked and cleared ({passed.length})</span>
+            <span className="text-slate-400">{showPassed ? "▲" : "▼"}</span>
+          </button>
+          {showPassed && (
+            <div className="mt-3 grid items-stretch gap-3 sm:grid-cols-2">
+              {passed.map((s) => (
+                <SignalCard key={s.id} signal={s} passed />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Evidence trail: sender domain + extracted URLs (collapsed, not a result). */}
       {(report.senderDomain || report.extractedUrls.length > 0) && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
           {report.senderDomain && (
             <p className="text-slate-600">
               <span className="font-medium text-slate-800">Sender domain:</span>{" "}
@@ -154,22 +308,19 @@ export default function ReportView({ report }: { report: Report }) {
             </p>
           )}
           {report.extractedUrls.length > 0 && (
-            <div className="mt-2">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-800">
-                  {report.extractedUrls.length} URL{report.extractedUrls.length === 1 ? "" : "s"} found
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowUrls((v) => !v)}
-                  className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-                  aria-expanded={showUrls}
-                >
-                  {showUrls ? "Hide URLs" : "Show URLs"}
-                </button>
-              </div>
+            <div className={report.senderDomain ? "mt-2" : ""}>
+              <button
+                type="button"
+                onClick={() => setShowUrls((v) => !v)}
+                className="text-xs font-medium text-slate-500 underline-offset-2 transition hover:text-slate-800 hover:underline"
+                aria-expanded={showUrls}
+              >
+                {showUrls
+                  ? "Hide extracted URLs"
+                  : `Show extracted URLs (${report.extractedUrls.length})`}
+              </button>
               {showUrls && (
-                <ul className="mt-1 space-y-0.5">
+                <ul className="mt-1.5 space-y-0.5">
                   {report.extractedUrls.map((u) => (
                     <li key={u} className="break-all font-mono text-[12px] text-slate-600">
                       {u}
@@ -181,61 +332,6 @@ export default function ReportView({ report }: { report: Report }) {
           )}
         </div>
       )}
-
-      {/* AI explanation (Phase 3) */}
-      {report.aiExplanation ? (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-          <h2 className="text-sm font-semibold text-indigo-900">AI Explanation</h2>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-indigo-900/90">{report.aiExplanation}</p>
-          <p className="mt-2 text-xs text-indigo-700/70">
-            The AI layer only explains the deterministic findings above — it does not change the score.
-          </p>
-        </div>
-      ) : (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-2 text-xs text-slate-500">
-          AI explanation disabled — add an API key to enable.
-        </p>
-      )}
-
-      {/* Triggered signals */}
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          {triggered.length > 0
-            ? `Why this scored ${report.riskScore} — ${triggered.length} signal${triggered.length === 1 ? "" : "s"} triggered`
-            : "No risk signals triggered"}
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {triggered.map((s) => (
-            <SignalCard key={s.id} signal={s} />
-          ))}
-        </div>
-      </section>
-
-      {/* Passed checks */}
-      {passed.length > 0 && (
-        <section>
-          <button
-            type="button"
-            onClick={() => setShowPassed((v) => !v)}
-            className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-            aria-expanded={showPassed}
-          >
-            <span>What was checked and passed ({passed.length})</span>
-            <span className="text-slate-400">{showPassed ? "▲" : "▼"}</span>
-          </button>
-          {showPassed && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              {passed.map((s) => (
-                <SignalCard key={s.id} signal={s} passed />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <p className="border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-500">
-        {report.disclaimer}
-      </p>
     </div>
   );
 }

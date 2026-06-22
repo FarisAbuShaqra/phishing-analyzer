@@ -24,6 +24,9 @@ PayPal Security Team`;
 
 type Mode = "paste" | "upload";
 
+const DISCLAIMER =
+  "Disclaimer: An explainable triage and education tool, not a replacement for enterprise email security. Checks report verifiable facts and the AI only explains them; a Low score is not a guarantee of safety.";
+
 export default function Home() {
   const [mode, setMode] = useState<Mode>("paste");
   const [content, setContent] = useState("");
@@ -73,32 +76,32 @@ export default function Home() {
     }
   }
 
+  const tabClass = (m: Mode) =>
+    `rounded-md px-4 py-1.5 font-medium transition ${
+      mode === m ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+    }`;
+
+  const primaryBtn =
+    "rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50";
+  const linkBtn =
+    "text-sm font-medium text-slate-500 underline-offset-2 transition hover:text-slate-800 hover:underline";
+
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10 sm:py-14">
+    <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Phishing Triage Analyzer
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+          Is this email trying to scam you?
         </h1>
-        <p className="mt-2 text-slate-600">
-          Paste a suspicious email, message, or URL to get an{" "}
-          <span className="font-medium text-slate-800">explainable</span> threat report —
-          every verdict is backed by concrete, named evidence.
+        <p className="mt-3 text-base leading-relaxed text-slate-600">
+          Paste a suspicious email, message, or URL. You get a clear verdict and the exact evidence
+          behind it — no black box, no guessing.
         </p>
       </header>
 
       {/* Input mode tabs */}
       <div className="mb-3 inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
         {(["paste", "upload"] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => setMode(m)}
-            className={`rounded-md px-4 py-1.5 font-medium transition ${
-              mode === m
-                ? "bg-slate-900 text-white"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
+          <button key={m} type="button" onClick={() => setMode(m)} className={tabClass(m)}>
             {m === "paste" ? "Paste text" : "Upload .eml"}
           </button>
         ))}
@@ -109,25 +112,16 @@ export default function Home() {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="Paste a suspicious email, message, or URL…"
+            placeholder="Paste the email, message, or link that looks off…"
             rows={10}
-            className="w-full resize-y rounded-lg border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="w-full resize-y rounded-xl border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 transition focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={runAnalyze}
-              disabled={!canAnalyze}
-              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button type="button" onClick={runAnalyze} disabled={!canAnalyze} className={primaryBtn}>
               {state.status === "loading" ? "Analyzing…" : "Analyze"}
             </button>
-            <button
-              type="button"
-              onClick={() => setContent(SAMPLE)}
-              className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-            >
-              Load sample phishing email
+            <button type="button" onClick={() => setContent(SAMPLE)} className={linkBtn}>
+              Try a sample phish
             </button>
             {content && (
               <button
@@ -136,7 +130,7 @@ export default function Home() {
                   setContent("");
                   setState({ status: "idle" });
                 }}
-                className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                className={linkBtn}
               >
                 Clear
               </button>
@@ -156,7 +150,7 @@ export default function Home() {
               e.stopPropagation();
               pickFile(e.dataTransfer.files?.[0] ?? null);
             }}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-10 text-center transition hover:border-slate-400 hover:bg-slate-50"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-12 text-center transition hover:border-slate-400 hover:bg-slate-50"
           >
             <input
               type="file"
@@ -165,20 +159,15 @@ export default function Home() {
               onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
             />
             <span className="text-sm font-medium text-slate-700">
-              {file ? file.name : "Choose a .eml file"}
+              {file ? file.name : "Drop a .eml here, or click to choose"}
             </span>
             <span className="text-xs text-slate-400">
-              Parses real headers — sender, Reply-To, and SPF/DKIM/DMARC
+              We read the real headers: sender, Reply-To, and SPF/DKIM/DMARC.
             </span>
           </label>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={runAnalyze}
-              disabled={!canAnalyze}
-              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button type="button" onClick={runAnalyze} disabled={!canAnalyze} className={primaryBtn}>
               {state.status === "loading" ? "Analyzing…" : "Analyze .eml"}
             </button>
             {file && (
@@ -188,19 +177,19 @@ export default function Home() {
                   setFile(null);
                   setState({ status: "idle" });
                 }}
-                className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                className={linkBtn}
               >
                 Clear
               </button>
             )}
           </div>
 
-          {/* Tutorial */}
-          <div className="rounded-lg border border-slate-200 bg-white">
+          {/* Tutorial — collapsed by default, quiet. */}
+          <div className="rounded-xl border border-slate-200 bg-white">
             <button
               type="button"
               onClick={() => setShowHelp((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-slate-600 transition hover:bg-slate-50"
               aria-expanded={showHelp}
             >
               <span>How do I get an .eml file?</span>
@@ -209,20 +198,20 @@ export default function Home() {
             {showHelp && (
               <ul className="space-y-1.5 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
                 <li>
-                  <span className="font-medium text-slate-800">Gmail (web):</span> open the
-                  email → ⋮ menu → “Download message”.
+                  <span className="font-medium text-slate-800">Gmail (web):</span> open the email →
+                  ⋮ menu → “Download message”.
                 </li>
                 <li>
-                  <span className="font-medium text-slate-800">Outlook (web):</span> open the
-                  email → ⋮ menu → “Save as” (or drag the email to your desktop).
+                  <span className="font-medium text-slate-800">Outlook (web):</span> open the email
+                  → ⋮ menu → “Save as” (or drag the email to your desktop).
                 </li>
                 <li>
-                  <span className="font-medium text-slate-800">Apple Mail:</span> select the
-                  email → File → “Save As” → Raw Message Source.
+                  <span className="font-medium text-slate-800">Apple Mail:</span> select the email →
+                  File → “Save As” → Raw Message Source.
                 </li>
                 <li>
-                  <span className="font-medium text-slate-800">Outlook (desktop):</span> open
-                  the email → File → Save As → choose .eml.
+                  <span className="font-medium text-slate-800">Outlook (desktop):</span> open the
+                  email → File → Save As → choose .eml.
                 </li>
               </ul>
             )}
@@ -232,34 +221,35 @@ export default function Home() {
 
       <section className="mt-8">
         {state.status === "idle" && (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-            Your report will appear here.
+          <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
+            Nothing analyzed yet. Paste something that looks off and we&apos;ll break it down.
           </p>
         )}
 
         {state.status === "loading" && (
-          <div className="space-y-3" aria-busy="true">
-            <div className="h-28 animate-pulse rounded-xl bg-slate-200" />
+          <div className="animate-fade-in space-y-3" aria-busy="true">
+            <p className="text-center text-sm text-slate-500">
+              Reading the headers, tracing the links, checking the story…
+            </p>
+            <div className="h-36 animate-pulse rounded-2xl bg-slate-200" />
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="h-32 animate-pulse rounded-lg bg-slate-200" />
-              <div className="h-32 animate-pulse rounded-lg bg-slate-200" />
+              <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
+              <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
             </div>
           </div>
         )}
 
         {state.status === "error" && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {state.message}
+          <div className="animate-fade-in rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span className="font-medium">Couldn&apos;t analyze that.</span> {state.message}
           </div>
         )}
 
         {state.status === "result" && <ReportView report={state.report} />}
       </section>
 
-      <footer className="mt-12 border-t border-slate-200 pt-4 text-xs text-slate-400">
-        Explainable triage &amp; education tool — not a replacement for enterprise email
-        security. Deterministic checks report verifiable facts; the optional AI layer only
-        explains them and never decides the verdict.
+      <footer className="mt-14 border-t border-slate-200 pt-4 text-xs leading-relaxed text-slate-400">
+        {DISCLAIMER}
       </footer>
     </main>
   );
