@@ -1,5 +1,6 @@
-import type { Report } from "../types";
+import type { ParsedHeaders, Report } from "../types";
 import { parseInput, registrableDomain } from "./extract";
+import { parseAuthResults, authResultsCheck, replyToCheck } from "./headerChecks";
 import {
   punycodeCheck,
   lookalikeCheck,
@@ -19,10 +20,27 @@ import { scoreSignals, recommendedAction, DISCLAIMER } from "./score";
  * Run the full deterministic engine. Pure except for the best-effort,
  * timeout-guarded domain-age RDAP lookup.
  */
-export async function analyze(raw: string): Promise<Report> {
+export async function analyze(
+  raw: string,
+  headers?: ParsedHeaders,
+): Promise<Report> {
   const input = parseInput(raw);
 
-  // Synchronous deterministic checks.
+  // When parsed from an .eml, the true header values override anything inferred
+  // from the body text, and the real sender domain is scrutinized for
+  // lookalike / punycode just like any URL host.
+  if (headers) {
+    if (headers.fromName) input.senderDisplayName = headers.fromName;
+    if (headers.fromAddress) {
+      input.senderAddress = headers.fromAddress;
+      input.senderDomain = headers.fromDomain;
+    }
+    if (headers.fromDomain && !input.domains.includes(headers.fromDomain)) {
+      input.domains.push(headers.fromDomain);
+    }
+  }
+
+  // Synchronous deterministic checks (body + URL + sender) — unchanged.
   const syncSignals = [
     punycodeCheck(input),
     lookalikeCheck(input),
@@ -33,6 +51,14 @@ export async function analyze(raw: string): Promise<Report> {
     credentialAskCheck(input),
     genericGreetingCheck(input),
   ];
+
+  // Header-derived checks, only when an .eml was parsed.
+  let emailAuth: Report["emailAuth"];
+  if (headers) {
+    const verdict = parseAuthResults(headers.authResultsLines);
+    emailAuth = verdict;
+    syncSignals.push(replyToCheck(headers), authResultsCheck(verdict));
+  }
 
   // Async, network-bound check — guarded internally, never throws.
   const ageSignal = await domainAgeCheck(input);
@@ -49,6 +75,8 @@ export async function analyze(raw: string): Promise<Report> {
     senderDomain: input.senderDomain
       ? registrableDomain(input.senderDomain)
       : undefined,
+    senderAddress: input.senderAddress,
+    emailAuth,
     aiExplanation: null, // filled in by the API route via the AI stub
     recommendedAction: recommendedAction(riskCategory),
     disclaimer: DISCLAIMER,

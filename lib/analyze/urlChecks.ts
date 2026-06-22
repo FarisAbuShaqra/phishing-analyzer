@@ -122,14 +122,17 @@ export function linkMismatchCheck(input: ParsedInput): Signal {
     why: "When the visible link text names one site but the href points to another, the link is disguising its true destination.",
   };
 
+  // A domain named in the link text: one or more labels, a dot, and a TLD.
+  // Ordinary navigational text ("Security", "apps", "click here", "view") has
+  // no such pattern, so it is never treated as a disguised link.
+  const DOMAIN_IN_TEXT_RE = /\b((?:[a-z0-9-]+\.)+[a-z]{2,})\b/i;
+
   const hits: string[] = [];
   for (const link of input.links) {
-    // Does the displayed text itself look like a domain/URL?
-    const textHost =
-      hostnameOf(link.text) ??
-      (/(?:[a-z0-9-]+\.)+[a-z]{2,}/i.exec(link.text)?.[0]
-        ? hostnameOf(/(?:[a-z0-9-]+\.)+[a-z]{2,}/i.exec(link.text)![0])
-        : null);
+    const named = DOMAIN_IN_TEXT_RE.exec(link.text);
+    if (!named) continue; // link text doesn't name a domain — normal linking
+
+    const textHost = hostnameOf(named[1]);
     const hrefHost = hostnameOf(link.href);
     if (!textHost || !hrefHost) continue;
 

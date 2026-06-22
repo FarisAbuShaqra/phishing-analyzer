@@ -22,19 +22,43 @@ Confirm your password and one-time code here: http://paypal.com.secure-login.xyz
 
 PayPal Security Team`;
 
+type Mode = "paste" | "upload";
+
 export default function Home() {
+  const [mode, setMode] = useState<Mode>("paste");
   const [content, setContent] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const [state, setState] = useState<State>({ status: "idle" });
 
-  async function analyze() {
-    if (!content.trim()) return;
+  const canAnalyze =
+    state.status !== "loading" &&
+    (mode === "paste" ? content.trim().length > 0 : file !== null);
+
+  // Shared by the file picker and drag-and-drop, so both behave identically.
+  function pickFile(f: File | null) {
+    setFile(f);
+    setState({ status: "idle" });
+  }
+
+  async function runAnalyze() {
+    if (!canAnalyze) return;
     setState({ status: "loading" });
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
+      const res =
+        mode === "paste"
+          ? await fetch("/api/analyze", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ content }),
+            })
+          : await (() => {
+              const fd = new FormData();
+              fd.append("file", file as File);
+              // No explicit Content-Type — the browser sets the multipart boundary.
+              return fetch("/api/analyze", { method: "POST", body: fd });
+            })();
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Request failed (${res.status})`);
@@ -62,44 +86,149 @@ export default function Home() {
         </p>
       </header>
 
-      <div className="space-y-3">
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Paste a suspicious email, message, or URL…"
-          rows={10}
-          className="w-full resize-y rounded-lg border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-        />
-        <div className="flex flex-wrap items-center gap-3">
+      {/* Input mode tabs */}
+      <div className="mb-3 inline-flex rounded-lg border border-slate-300 bg-white p-1 text-sm">
+        {(["paste", "upload"] as const).map((m) => (
           <button
+            key={m}
             type="button"
-            onClick={analyze}
-            disabled={state.status === "loading" || !content.trim()}
-            className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setMode(m)}
+            className={`rounded-md px-4 py-1.5 font-medium transition ${
+              mode === m
+                ? "bg-slate-900 text-white"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
           >
-            {state.status === "loading" ? "Analyzing…" : "Analyze"}
+            {m === "paste" ? "Paste text" : "Upload .eml"}
           </button>
-          <button
-            type="button"
-            onClick={() => setContent(SAMPLE)}
-            className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-          >
-            Load sample phishing email
-          </button>
-          {content && (
+        ))}
+      </div>
+
+      {mode === "paste" ? (
+        <div className="space-y-3">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Paste a suspicious email, message, or URL…"
+            rows={10}
+            className="w-full resize-y rounded-lg border border-slate-300 bg-white p-4 font-mono text-sm text-slate-900 shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          />
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                setContent("");
-                setState({ status: "idle" });
-              }}
+              onClick={runAnalyze}
+              disabled={!canAnalyze}
+              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {state.status === "loading" ? "Analyzing…" : "Analyze"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setContent(SAMPLE)}
               className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
             >
-              Clear
+              Load sample phishing email
             </button>
-          )}
+            {content && (
+              <button
+                type="button"
+                onClick={() => {
+                  setContent("");
+                  setState({ status: "idle" });
+                }}
+                className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <label
+            onDragOver={(e) => {
+              // Stop the browser from navigating to / opening the dropped file.
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              pickFile(e.dataTransfer.files?.[0] ?? null);
+            }}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-white px-4 py-10 text-center transition hover:border-slate-400 hover:bg-slate-50"
+          >
+            <input
+              type="file"
+              accept=".eml,message/rfc822"
+              className="hidden"
+              onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
+            />
+            <span className="text-sm font-medium text-slate-700">
+              {file ? file.name : "Choose a .eml file"}
+            </span>
+            <span className="text-xs text-slate-400">
+              Parses real headers — sender, Reply-To, and SPF/DKIM/DMARC
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={runAnalyze}
+              disabled={!canAnalyze}
+              className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {state.status === "loading" ? "Analyzing…" : "Analyze .eml"}
+            </button>
+            {file && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFile(null);
+                  setState({ status: "idle" });
+                }}
+                className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Tutorial */}
+          <div className="rounded-lg border border-slate-200 bg-white">
+            <button
+              type="button"
+              onClick={() => setShowHelp((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+              aria-expanded={showHelp}
+            >
+              <span>How do I get an .eml file?</span>
+              <span className="text-slate-400">{showHelp ? "▲" : "▼"}</span>
+            </button>
+            {showHelp && (
+              <ul className="space-y-1.5 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+                <li>
+                  <span className="font-medium text-slate-800">Gmail (web):</span> open the
+                  email → ⋮ menu → “Download message”.
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">Outlook (web):</span> open the
+                  email → ⋮ menu → “Save as” (or drag the email to your desktop).
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">Apple Mail:</span> select the
+                  email → File → “Save As” → Raw Message Source.
+                </li>
+                <li>
+                  <span className="font-medium text-slate-800">Outlook (desktop):</span> open
+                  the email → File → Save As → choose .eml.
+                </li>
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       <section className="mt-8">
         {state.status === "idle" && (

@@ -8,6 +8,22 @@ The distinctive angle is **transparency**. This is not a black-box "phishing: ye
 - The optional **AI layer only explains** those facts in plain English. It never decides the verdict.
 - This is a **triage and education tool, not a replacement for enterprise email security.**
 
+## Two ways to analyze
+
+1. **Paste text** — drop in a suspicious email, message, or URL.
+2. **Upload a `.eml`** — the actual email file, parsed server-side with [`mailparser`](https://nodemailer.com/extras/mailparser/). This is **stronger than pasted text**: it reads the *real* `From` address (not just the visible display name), the `Reply-To` / `Return-Path`, and the **SPF / DKIM / DMARC** authentication results — header data that simply isn't present when you paste body text.
+
+The report shows the detected real sender and the SPF/DKIM/DMARC verdict prominently at the top.
+
+### How do I get a `.eml` file?
+
+- **Gmail (web):** open the email → ⋮ menu → "Download message"
+- **Outlook (web):** open the email → ⋮ menu → "Save as" (or drag the email to your desktop)
+- **Apple Mail:** select the email → File → "Save As" → Raw Message Source
+- **Outlook (desktop):** open the email → File → Save As → choose `.eml`
+
+(The app shows this same list in a collapsible helper next to the upload zone.)
+
 ## What it checks
 
 **URLs & domains**
@@ -22,6 +38,14 @@ The distinctive angle is **transparency**. This is not a black-box "phishing: ye
 - Credential or payment asks (password, OTP/2FA code, gift card, wire transfer, crypto, bank details)
 - Generic greeting ("Dear Customer/User/Member")
 - Sender mismatch: display name impersonates a brand but the real address domain is unrelated
+
+**Email headers (`.eml` uploads only)**
+- **Real `From` address** — the mismatch check runs against the true header address, not text inferred from the body.
+- **`Reply-To` / `Return-Path` mismatch** — flagged (medium) when their domain differs from the `From` domain, a common way to route your reply or bounces to an attacker.
+- **SPF / DKIM / DMARC** (`Authentication-Results` header), graded carefully:
+  - `spf=fail`, `dkim=fail`, or `dmarc=fail` → **high-severity, triggered.**
+  - `pass` → a reassuring **info** signal that **does not lower the score on its own.** A phisher can pass authentication from their *own* lookalike domain, so an email that passes auth but has a lookalike sender still scores **High**. A pass only confirms the email truly came from the domain it claims — the other checks decide whether that domain is trustworthy.
+  - **Missing** `Authentication-Results` header → neutral, non-triggered info ("email authentication results not available"). Absence is never treated as a red flag (same graceful-degradation pattern as the domain-age lookup).
 
 Each signal carries a severity weight (high = 30, medium = 15, low = 7, info = 0). Triggered weights are summed and capped at 100: **0–29 Low, 30–64 Medium, 65–100 High.** The report also lists key checks that *passed*, so you can see what was examined.
 
@@ -80,6 +104,7 @@ The call runs **server-side only** inside `/api/analyze`. No secret ever reaches
 ## Limitations (honest)
 
 - The deterministic checks are reliable for the patterns they cover, but **no rule set catches every phishing technique.** A Low score is not a guarantee of safety.
+- **Authentication `pass` is confirmation of origin, not proof of safety.** It only means the email genuinely came from the domain it claims — which is no help if that domain is itself a lookalike the attacker controls.
 - The optional AI layer is probabilistic and only *explains* — do not treat it as a verdict.
 - This tool does **not** replace enterprise email filtering, link sandboxing, or attachment scanning.
 - Domain-age lookups depend on a free third-party RDAP service and may be unavailable.
@@ -87,6 +112,7 @@ The call runs **server-side only** inside `/api/analyze`. No secret ever reaches
 ## Architecture
 
 - **Next.js (App Router) + TypeScript + Tailwind CSS.**
-- All analysis runs server-side in `/api/analyze` (needed for the RDAP lookup and, later, the LLM call). No secrets in client code.
-- Stateless — no database. Paste in, report out.
-- Signal engine lives in `lib/analyze/` as small pure functions, each returning a typed `Signal`.
+- All analysis runs server-side in `/api/analyze` (needed for `.eml` parsing, the RDAP lookup, and, later, the LLM call). No secrets in client code.
+- `.eml` uploads are parsed with `mailparser`; the body runs through the exact same language + URL checks as pasted text, and the headers add the sender / Reply-To / auth-result signals.
+- Stateless — no database. Paste in (or upload), report out.
+- Signal engine lives in `lib/analyze/` as small pure functions, each returning a typed `Signal` (`urlChecks`, `languageChecks`, `headerChecks`, `domainAge`, `score`).

@@ -37,18 +37,84 @@ function RiskGauge({ report }: { report: Report }) {
   );
 }
 
-function SignalCard({ signal }: { signal: Signal }) {
-  const sev = SEVERITY_STYLES[signal.severity];
+function AuthChip({ label, value }: { label: string; value?: string }) {
+  const v = (value ?? "n/a").toLowerCase();
+  const style =
+    v === "pass"
+      ? "bg-emerald-100 text-emerald-800"
+      : v === "fail" || v === "softfail"
+        ? "bg-red-100 text-red-800"
+        : "bg-slate-100 text-slate-600";
+  return (
+    <span className={`rounded-md px-2 py-1 text-xs font-medium ${style}`}>
+      {label}: <span className="font-semibold capitalize">{value ?? "n/a"}</span>
+    </span>
+  );
+}
+
+function HeaderPanel({ report }: { report: Report }) {
+  if (!report.emailAuth) return null;
+  const { emailAuth } = report;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Parsed email headers
+      </h2>
+      {report.senderAddress && (
+        <p className="mt-2 text-sm text-slate-700">
+          <span className="font-medium">Real sender:</span>{" "}
+          <span className="break-all font-mono">{report.senderAddress}</span>
+        </p>
+      )}
+      <div className="mt-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Authentication
+        </span>
+        {emailAuth.available ? (
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            <AuthChip label="SPF" value={emailAuth.spf} />
+            <AuthChip label="DKIM" value={emailAuth.dkim} />
+            <AuthChip label="DMARC" value={emailAuth.dmarc} />
+          </div>
+        ) : (
+          <p className="mt-1 text-sm text-slate-500">
+            Authentication results not available — treated as neutral, not a red flag.
+          </p>
+        )}
+      </div>
+      {emailAuth.available && (
+        <p className="mt-2 text-xs text-slate-400">
+          A pass confirms the email came from the domain it claims — it does not prove the
+          domain is trustworthy.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SignalCard({ signal, passed }: { signal: Signal; passed?: boolean }) {
+  const sev = SEVERITY_STYLES[signal.severity];
+  return (
+    <div
+      className={`rounded-lg border border-slate-200 p-4 ${passed ? "bg-slate-50/70" : "bg-white"}`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${sev.dot}`} aria-hidden />
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${passed ? "bg-slate-300" : sev.dot}`}
+            aria-hidden
+          />
           <h3 className="font-medium text-slate-900">{signal.label}</h3>
         </div>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${sev.chip}`}>
-          {signal.severity}
-        </span>
+        {passed ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+            <span aria-hidden>✓</span> Passed
+          </span>
+        ) : (
+          <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${sev.chip}`}>
+            {signal.severity}
+          </span>
+        )}
       </div>
       <dl className="mt-3 space-y-2 text-sm">
         <div>
@@ -66,6 +132,7 @@ function SignalCard({ signal }: { signal: Signal }) {
 
 export default function ReportView({ report }: { report: Report }) {
   const [showPassed, setShowPassed] = useState(false);
+  const [showUrls, setShowUrls] = useState(false);
 
   const triggered = report.signals.filter((s) => s.triggered);
   const passed = report.signals.filter((s) => !s.triggered);
@@ -73,6 +140,9 @@ export default function ReportView({ report }: { report: Report }) {
   return (
     <div className="space-y-6">
       <RiskGauge report={report} />
+
+      {/* Parsed .eml header summary (real sender + SPF/DKIM/DMARC) */}
+      <HeaderPanel report={report} />
 
       {/* Metadata */}
       {(report.senderDomain || report.extractedUrls.length > 0) && (
@@ -85,14 +155,28 @@ export default function ReportView({ report }: { report: Report }) {
           )}
           {report.extractedUrls.length > 0 && (
             <div className="mt-2">
-              <span className="font-medium text-slate-800">URLs found ({report.extractedUrls.length}):</span>
-              <ul className="mt-1 space-y-0.5">
-                {report.extractedUrls.map((u) => (
-                  <li key={u} className="break-all font-mono text-[12px] text-slate-600">
-                    {u}
-                  </li>
-                ))}
-              </ul>
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-800">
+                  {report.extractedUrls.length} URL{report.extractedUrls.length === 1 ? "" : "s"} found
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowUrls((v) => !v)}
+                  className="text-xs font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                  aria-expanded={showUrls}
+                >
+                  {showUrls ? "Hide URLs" : "Show URLs"}
+                </button>
+              </div>
+              {showUrls && (
+                <ul className="mt-1 space-y-0.5">
+                  {report.extractedUrls.map((u) => (
+                    <li key={u} className="break-all font-mono text-[12px] text-slate-600">
+                      {u}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
@@ -142,7 +226,7 @@ export default function ReportView({ report }: { report: Report }) {
           {showPassed && (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               {passed.map((s) => (
-                <SignalCard key={s.id} signal={s} />
+                <SignalCard key={s.id} signal={s} passed />
               ))}
             </div>
           )}

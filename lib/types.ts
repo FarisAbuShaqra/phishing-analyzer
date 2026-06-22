@@ -9,15 +9,38 @@ export interface Signal {
   why: string; // one sentence on why it matters
 }
 
+/** SPF / DKIM / DMARC results parsed from an Authentication-Results header. */
+export interface AuthVerdict {
+  spf?: string;
+  dkim?: string;
+  dmarc?: string;
+  available: boolean; // false when no Authentication-Results header was present
+}
+
 export interface Report {
   riskScore: number; // 0–100
   riskCategory: "Low" | "Medium" | "High";
   signals: Signal[]; // include both triggered and key not-triggered checks
   extractedUrls: string[];
   senderDomain?: string;
+  senderAddress?: string; // real From address when parsed from an .eml
+  emailAuth?: AuthVerdict; // present only when an .eml was parsed
   aiExplanation: string | null; // null when no API key (Phase 3 stub)
   recommendedAction: string;
   disclaimer: string;
+}
+
+/** Header fields extracted from an uploaded .eml, fed into the engine. */
+export interface ParsedHeaders {
+  fromAddress?: string;
+  fromName?: string;
+  fromDomain?: string;
+  replyToAddress?: string;
+  replyToDomain?: string;
+  returnPathAddress?: string;
+  returnPathDomain?: string;
+  /** All Authentication-Results header values (may be empty). */
+  authResultsLines: string[];
 }
 
 /** Parsed view of the pasted content, shared by all signal checks. */
