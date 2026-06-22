@@ -90,11 +90,10 @@ export default function Home() {
     <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
       <header className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Is this email trying to scam you?
+          Paste an email, message, or link.
         </h1>
         <p className="mt-3 text-base leading-relaxed text-slate-600">
-          Paste a suspicious email, message, or URL. You get a clear verdict and the exact evidence
-          behind it — no black box, no guessing.
+          Get a clear verdict and the exact evidence behind it. No black box. No guessing.
         </p>
       </header>
 
